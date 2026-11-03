@@ -55,3 +55,17 @@ export interface ConversationItem {
   replyZh?: string;
   keyPoints?: string;
 }
+
+export interface MnemonicCard {
+  id: string;
+  romaji: string;
+  hiragana: string;
+  katakana: string;
+  visualEmoji: string;
+  row: string;
+  hiraMnemonicTitle: string;
+  hiraMnemonicDesc: string;
+  kataMnemonicTitle: string;
+  kataMnemonicDesc: string;
+  examWordHint?: string;
+}

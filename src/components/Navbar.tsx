@@ -15,6 +15,7 @@ import { VoiceEngineType, speakJapanese } from '../utils/audio';
 
 export type NavTab =
   | 'midterm_exam'
+  | 'visual_mnemonics'
   | 'category_quiz'
   | 'gojuon_chart'
   | 'number_lab'
@@ -61,6 +62,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       icon: FileCheck2,
       sub: '40題·100分',
       badge: '必考原題',
+    },
+    {
+      id: 'visual_mnemonics' as NavTab,
+      label: '🎨 圖像記憶館',
+      icon: Sparkles,
+      sub: '清濁拗音秒記',
+      badge: '背不起來救星',
     },
     {
       id: 'category_quiz' as NavTab,

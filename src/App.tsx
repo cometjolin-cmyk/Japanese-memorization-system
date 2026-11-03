@@ -22,6 +22,7 @@ import { ConversationView } from './components/ConversationView';
 import { FlashcardsView } from './components/FlashcardsView';
 import { MistakesReview } from './components/MistakesReview';
 import { CategoryQuizSelector } from './components/CategoryQuizSelector';
+import { VisualMnemonics } from './components/VisualMnemonics';
 import { HIRAGANA_EXAM_QUESTIONS, KATAKANA_EXAM_QUESTIONS } from './data/examQuestions';
 import { GOJUON_PRACTICE_QUESTIONS, DAKUON_YOUON_QUESTIONS } from './data/gojuonData';
 import { CONVERSATION_QUIZ_QUESTIONS } from './data/conversationData';
@@ -173,6 +174,18 @@ export default function App() {
               onBackToHome={() => setActiveTab('category_quiz')}
             />
           </div>
+        )}
+
+        {/* TAB: VISUAL MNEMONICS (圖像記憶館) */}
+        {activeTab === 'visual_mnemonics' && (
+          <VisualMnemonics
+            speechRate={speechRate}
+            onLaunchPracticeQuiz={() => {
+              setActiveTab('category_quiz');
+              setActiveQuizCategory('gojuon');
+              setActiveQuizTitle('五十音平片對照與辨識測驗');
+            }}
+          />
         )}
 
         {/* TAB 2: CATEGORY QUIZ SELECTOR OR SPECIFIC QUIZ */}
