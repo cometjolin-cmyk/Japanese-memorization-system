@@ -1,0 +1,6 @@
+{
+  "name": "日文一期中考前考衝刺複習測驗系統",
+  "description": "日文一期中考必勝複習系統：收錄平假名/片假名原題40問、五十音清音/濁音/拗音、生活日常會話、數字聽讀選，支援真人語音朗讀與錯題弱點加強。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
