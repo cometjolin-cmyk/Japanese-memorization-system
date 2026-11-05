@@ -10,10 +10,37 @@ import {
   Bookmark,
   Sparkles,
   Trophy,
+  Shuffle,
+  ListOrdered,
 } from 'lucide-react';
 import { QuizQuestion } from '../types/quiz';
 import { speakJapanese, sfx } from '../utils/audio';
 import { AudioButton } from './AudioButton';
+
+function shuffleQuestionAndOptions(q: QuizQuestion): QuizQuestion {
+  const indexed = q.options.map((opt, idx) => ({ opt, idx }));
+  for (let i = indexed.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
+  }
+  const newOptions = indexed.map((item) => item.opt);
+  const newCorrectIndex = indexed.findIndex((item) => item.idx === q.correctIndex);
+  return {
+    ...q,
+    options: newOptions,
+    correctIndex: newCorrectIndex >= 0 ? newCorrectIndex : 0,
+  };
+}
+
+function randomizeQuizList(source: QuizQuestion[], limit?: number): QuizQuestion[] {
+  const copy = [...source];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  const sliced = limit && limit < copy.length ? copy.slice(0, limit) : copy;
+  return sliced.map(shuffleQuestionAndOptions);
+}
 
 interface QuizEngineProps {
   title: string;
@@ -38,22 +65,44 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
   mistakeIds,
   onBackToHome,
 }) => {
+  const [activeQuestions, setActiveQuestions] = useState<QuizQuestion[]>(() => questions);
+  const [isRandomized, setIsRandomized] = useState(false);
+  const [randomLimit, setRandomLimit] = useState<number | undefined>(undefined);
+  const [shuffleVersion, setShuffleVersion] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [isCompleted, setIsCompleted] = useState(false);
   const [autoPlayAudio, setAutoPlayAudio] = useState(true);
+  const [showPreHint, setShowPreHint] = useState(false);
 
-  const currentQ = questions[currentIndex];
+  const questionsSignature = `${questions.length}:${questions.map((q) => q.id).join('|')}`;
+
+  useEffect(() => {
+    setActiveQuestions(questions);
+    setIsRandomized(false);
+    setRandomLimit(undefined);
+    setUserAnswers({});
+    setCurrentIndex(0);
+    setIsCompleted(false);
+    setShuffleVersion((v) => v + 1);
+  }, [questionsSignature]);
+
+  const currentQ = activeQuestions[currentIndex];
   const hasAnswered = userAnswers[currentIndex] !== undefined;
   const selectedAnswer = userAnswers[currentIndex];
   const isCorrect = selectedAnswer === currentQ?.correctIndex;
 
-  // Auto-speak when moving to next question if enabled
+  // Reset pre-hint when switching questions
   useEffect(() => {
-    if (autoPlayAudio && currentQ && !hasAnswered) {
+    setShowPreHint(false);
+  }, [currentIndex, shuffleVersion]);
+
+  // Auto-speak when moving to next question if enabled and not disabled pre-answer
+  useEffect(() => {
+    if (autoPlayAudio && currentQ && !hasAnswered && !currentQ.disablePreAnswerAudio) {
       speakJapanese(currentQ.audioText, speechRate);
     }
-  }, [currentIndex, autoPlayAudio]);
+  }, [currentIndex, autoPlayAudio, shuffleVersion]);
 
   const handleSelectOption = (idx: number) => {
     if (hasAnswered) return;
@@ -69,6 +118,13 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
       }
     }
 
+    // Play pronunciation after answering if pre-answer audio was gated
+    if (currentQ.disablePreAnswerAudio && autoPlayAudio) {
+      setTimeout(() => {
+        speakJapanese(currentQ.audioText, speechRate);
+      }, 220);
+    }
+
     if (!correct && onMistakeAdded) {
       onMistakeAdded(currentQ);
     } else if (correct && onMistakeResolved && mistakeIds.has(currentQ.id)) {
@@ -77,7 +133,7 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
   };
 
   const handleNext = () => {
-    if (currentIndex < questions.length - 1) {
+    if (currentIndex < activeQuestions.length - 1) {
       setCurrentIndex((prev) => prev + 1);
     } else {
       setIsCompleted(true);
@@ -97,13 +153,35 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
     setUserAnswers({});
     setCurrentIndex(0);
     setIsCompleted(false);
+    setShuffleVersion((v) => v + 1);
+  };
+
+  const handleRandomizeQuiz = (limit?: number) => {
+    const nextList = randomizeQuizList(questions, limit);
+    setActiveQuestions(nextList);
+    setIsRandomized(true);
+    setRandomLimit(limit);
+    setUserAnswers({});
+    setCurrentIndex(0);
+    setIsCompleted(false);
+    setShuffleVersion((v) => v + 1);
+  };
+
+  const handleRestoreOrder = () => {
+    setActiveQuestions(questions);
+    setIsRandomized(false);
+    setRandomLimit(undefined);
+    setUserAnswers({});
+    setCurrentIndex(0);
+    setIsCompleted(false);
+    setShuffleVersion((v) => v + 1);
   };
 
   // Score calculation
-  const totalQuestions = questions.length;
+  const totalQuestions = activeQuestions.length;
   const answeredCount = Object.keys(userAnswers).length;
   const correctCount = Object.entries(userAnswers).filter(
-    ([indexStr, ansIdx]) => questions[Number(indexStr)]?.correctIndex === ansIdx
+    ([indexStr, ansIdx]) => activeQuestions[Number(indexStr)]?.correctIndex === ansIdx
   ).length;
 
   // Score scaled to 100 points
@@ -120,8 +198,8 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
 
   // Completion Screen
   if (isCompleted) {
-    const wrongQuestions = questions.filter(
-      (_, i) => userAnswers[i] !== undefined && userAnswers[i] !== questions[i].correctIndex
+    const wrongQuestions = activeQuestions.filter(
+      (_, i) => userAnswers[i] !== undefined && userAnswers[i] !== activeQuestions[i].correctIndex
     );
 
     return (
@@ -166,14 +244,24 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
 
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
+              type="button"
+              onClick={() => handleRandomizeQuiz(randomLimit)}
+              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-xs transition-colors cursor-pointer flex items-center gap-2"
+            >
+              <Shuffle size={16} />
+              <span>隨機洗牌再測一次（題目＋選項打亂）</span>
+            </button>
+            <button
+              type="button"
               onClick={handleRestart}
-              className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-medium shadow-xs transition-colors cursor-pointer flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-white font-medium shadow-xs transition-colors cursor-pointer flex items-center gap-2"
             >
               <RotateCcw size={16} />
-              <span>重新再測一次</span>
+              <span>維持本輪題序重測</span>
             </button>
             {onBackToHome && (
               <button
+                type="button"
                 onClick={onBackToHome}
                 className="px-5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium transition-colors cursor-pointer"
               >
@@ -192,13 +280,14 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
             </div>
             <div className="divide-y divide-stone-100">
               {wrongQuestions.map((q) => {
-                const userChoice = userAnswers[questions.indexOf(q)];
+                const qIdx = activeQuestions.indexOf(q);
+                const userChoice = userAnswers[qIdx];
                 return (
                   <div key={q.id} className="py-4 first:pt-0 last:pb-0 space-y-2">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <span className="text-xs text-stone-600">
-                          第 {questions.indexOf(q) + 1} 題 · {q.categoryLabel}
+                          第 {qIdx + 1} 題 · {q.categoryLabel}
                         </span>
                         <div className="text-xl font-bold text-stone-900 font-japanese flex items-center gap-2 mt-0.5">
                           <span>{q.prompt}</span>
@@ -244,13 +333,70 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
             <h2 className="text-lg font-bold text-stone-900 mt-1">{title}</h2>
           </div>
 
-          <div className="text-right">
+          <div className="text-right tabular-nums">
             <div className="text-sm font-semibold text-stone-700">
               第 <span className="text-amber-600 font-bold">{currentIndex + 1}</span> / {totalQuestions} 題
             </div>
             <div className="text-xs text-stone-600">
               每題 {pointsPerQuestion % 1 === 0 ? pointsPerQuestion : pointsPerQuestion.toFixed(1)} 點數
             </div>
+          </div>
+        </div>
+
+        {/* Universal Randomize Controls Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleRandomizeQuiz(undefined)}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-98 ${
+                isRandomized && !randomLimit
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                  : 'bg-stone-900 hover:bg-amber-600 text-white'
+              }`}
+              title="將所有題目順序與每題的 A/B/C/D 選項順序全部隨機打亂"
+            >
+              <Shuffle size={13} />
+              <span>
+                {isRandomized && !randomLimit
+                  ? '再抽一輪全部隨機（題目＋選項洗牌）'
+                  : `隨機出題（全部 ${questions.length} 題＋選項洗牌）`}
+              </span>
+            </button>
+
+            {questions.length >= 16 && (
+              <button
+                type="button"
+                onClick={() => handleRandomizeQuiz(10)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                  isRandomized && randomLimit === 10
+                    ? 'bg-amber-100 text-amber-900 border-amber-400'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                }`}
+                title="從本題庫隨機抽出 10 題進行快速測驗"
+              >
+                <Shuffle size={12} />
+                <span>{isRandomized && randomLimit === 10 ? '再抽 10 題' : '隨機抽 10 題速測'}</span>
+              </button>
+            )}
+
+            {isRandomized && (
+              <button
+                type="button"
+                onClick={handleRestoreOrder}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-stone-100 hover:bg-stone-200 text-stone-700 transition-colors cursor-pointer flex items-center gap-1"
+                title="恢復題庫原本固定順序與選項順序"
+              >
+                <ListOrdered size={13} />
+                <span>恢復原順序</span>
+              </button>
+            )}
+          </div>
+
+          <div className="text-xs text-stone-500">
+            {isRandomized
+              ? '目前：隨機順序（題目與選項皆已洗牌）'
+              : '目前：標準順序'}
           </div>
         </div>
 
@@ -264,7 +410,7 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
 
         {/* Question navigator dots */}
         <div className="flex items-center gap-1 overflow-x-auto py-1 no-scrollbar">
-          {questions.map((q, idx) => {
+          {activeQuestions.map((q, idx) => {
             const ans = userAnswers[idx];
             const isDone = ans !== undefined;
             const isRight = ans === q.correctIndex;
@@ -282,9 +428,9 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
 
             return (
               <button
-                key={q.id}
+                key={`${q.id}-${idx}`}
                 onClick={() => setCurrentIndex(idx)}
-                className={`w-7 h-7 rounded-md text-xs font-medium shrink-0 transition-all cursor-pointer flex items-center justify-center ${dotColor}`}
+                className={`w-7 h-7 rounded-md text-xs font-medium shrink-0 transition-all cursor-pointer flex items-center justify-center tabular-nums ${dotColor}`}
                 title={`第 ${idx + 1} 題`}
               >
                 {idx + 1}
@@ -308,25 +454,91 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
         )}
 
         {/* Question Prompt */}
-        <div className="text-center py-4 px-2 bg-stone-50 rounded-2xl border border-stone-200/80">
-          <div className="text-xs uppercase tracking-wider text-stone-500 font-semibold mb-2">
-            {currentQ.promptType === 'english_meaning'
+        <div className="text-center py-5 px-4 bg-stone-50 rounded-2xl border border-stone-200/80 space-y-3">
+          <div className="text-xs sm:text-sm text-stone-600 font-semibold">
+            {currentQ.promptSub
+              ? currentQ.promptSub
+              : currentQ.promptType === 'english_meaning'
               ? '請選出對應的日文片假名單字'
               : currentQ.promptType === 'audio_only'
-              ? '請點擊聽取語音，選出正確答案'
+              ? '請聆聽日文發音，從下方選出正確答案'
               : '請選出正確的讀音或假名'}
           </div>
 
-          <div className="flex items-center justify-center gap-3">
-            <span className="text-4xl sm:text-5xl font-black text-stone-900 font-japanese tracking-wide">
-              {currentQ.prompt}
-            </span>
-            <AudioButton text={currentQ.audioText} rate={speechRate} size="lg" variant="primary" />
-          </div>
+          {currentQ.promptType === 'audio_only' ? (
+            <div className="py-2 flex flex-col items-center gap-3">
+              <div className="text-base sm:text-lg font-bold text-stone-800">
+                {currentQ.prompt}
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-2.5">
+                <AudioButton
+                  text={currentQ.audioText}
+                  rate={speechRate}
+                  size="lg"
+                  variant="pill"
+                  label="點擊唸出題目發音"
+                />
+                <AudioButton
+                  text={currentQ.audioText}
+                  rate={0.72}
+                  size="sm"
+                  variant="subtle"
+                  label="0.72x 慢速重聽"
+                />
+              </div>
+              {hasAnswered && (currentQ.furigana || currentQ.romaji) && (
+                <div className="pt-1 text-sm text-stone-700 font-japanese">
+                  語音內容：<strong className="text-amber-900 font-bold text-base">{currentQ.furigana || currentQ.audioText}</strong>
+                  <span className="text-stone-400 mx-2">·</span>
+                  <span className="font-mono text-xs text-stone-500">{currentQ.romaji}</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-3 py-1">
+              <span
+                className={`font-black text-stone-900 font-japanese tracking-wide tabular-nums ${
+                  currentQ.prompt.length <= 6
+                    ? 'text-5xl sm:text-6xl'
+                    : currentQ.prompt.length <= 14
+                    ? 'text-3xl sm:text-4xl'
+                    : 'text-xl sm:text-2xl leading-snug'
+                }`}
+              >
+                {currentQ.prompt}
+              </span>
+              {(!currentQ.disablePreAnswerAudio || hasAnswered) ? (
+                <AudioButton text={currentQ.audioText} rate={speechRate} size="lg" variant="primary" />
+              ) : (
+                <span className="text-xs px-2.5 py-1 rounded-lg bg-stone-200/80 text-stone-600 font-medium">
+                  作答後播放發音
+                </span>
+              )}
+            </div>
+          )}
 
           {currentQ.soundWarning && (
-            <div className="mt-3 inline-block text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+            <div className="text-xs font-semibold text-amber-800">
               {currentQ.soundWarning}
+            </div>
+          )}
+
+          {/* Optional pre-answer visual mnemonic hint */}
+          {!hasAnswered && currentQ.preHint && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setShowPreHint(!showPreHint)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 hover:text-amber-950 bg-amber-100/80 hover:bg-amber-200/70 px-3 py-1.5 rounded-lg border border-amber-300/70 transition-colors cursor-pointer"
+              >
+                <Lightbulb size={14} />
+                <span>{showPreHint ? '隱藏圖像記憶提示' : '想不起來？點我看圖像記憶提示'}</span>
+              </button>
+              {showPreHint && (
+                <div className="mt-2.5 max-w-md mx-auto p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950 text-left leading-relaxed shadow-2xs">
+                  {currentQ.preHint}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -363,6 +575,11 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
                 }
               }
 
+              // Hide option audio before answering on pure listening or kana recognition questions so user doesn't guess by sound
+              const showOptionAudio =
+                hasAnswered ||
+                (currentQ.promptType !== 'audio_only' && currentQ.promptType !== 'gojuon_char');
+
               return (
                 <button
                   key={idx}
@@ -376,20 +593,21 @@ export const QuizEngine: React.FC<QuizEngineProps> = ({
                     <span className="w-7 h-7 rounded-lg bg-white/80 border border-stone-200 flex items-center justify-center text-xs font-bold shrink-0 text-stone-600">
                       {String.fromCharCode(65 + idx)}
                     </span>
-                    <span className="text-lg sm:text-xl font-bold font-japanese tracking-wide truncate">
+                    <span className="text-lg sm:text-xl font-bold font-japanese tracking-wide tabular-nums truncate">
                       {option}
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                    {/* Audio button for each option so user can hear the pronunciation difference */}
-                    <AudioButton
-                      text={option}
-                      rate={speechRate}
-                      size="sm"
-                      variant="ghost"
-                      className="opacity-70 hover:opacity-100"
-                    />
+                    {showOptionAudio && (
+                      <AudioButton
+                        text={option}
+                        rate={speechRate}
+                        size="sm"
+                        variant="ghost"
+                        className="opacity-70 hover:opacity-100"
+                      />
+                    )}
                     {badge}
                   </div>
                 </button>

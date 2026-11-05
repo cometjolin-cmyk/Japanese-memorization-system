@@ -9,17 +9,30 @@ import {
   ArrowRight,
   AlertTriangle,
   Flame,
+  Shuffle,
 } from 'lucide-react';
 import { QuizCategory } from '../types/quiz';
 
 interface CategoryQuizSelectorProps {
   onSelectCategory: (category: QuizCategory | 'custom_combined', name: string) => void;
+  onOpenFullGojuonHub?: () => void;
 }
 
 export const CategoryQuizSelector: React.FC<CategoryQuizSelectorProps> = ({
   onSelectCategory,
+  onOpenFullGojuonHub,
 }) => {
   const categories = [
+    {
+      id: 'custom_combined' as const,
+      title: '🎲 全範圍綜合隨機大亂鬥 (25題抽考)',
+      desc: '從「期中 40 單字 ＋ 50 音魔王字 ＋ 8 大會話 ＋ 數字聽讀選」隨機抽出 25 題並打亂選項，每次點開都是全新考卷！',
+      badge: '全範圍隨機抽題',
+      badgeColor: 'bg-amber-600 text-white',
+      count: '25 題 · 全範圍隨機',
+      icon: Shuffle,
+      highlight: true,
+    },
     {
       id: 'midterm_hiragana' as QuizCategory,
       title: '期中考平假名原題 (20題)',
@@ -41,12 +54,22 @@ export const CategoryQuizSelector: React.FC<CategoryQuizSelectorProps> = ({
       highlight: true,
     },
     {
+      id: 'gojuon' as QuizCategory,
+      title: '五十音平片對照與形似大魔王 (30題)',
+      desc: '含圖像記憶提示！專考 シ/ツ、ソ/ン、ス/ヌ、ぬ/ね/め、わ/れ、は/ほ、る/ろ、ク/ケ/タ、ユ/コ 等易錯假名',
+      badge: '附圖像記憶提示',
+      badgeColor: 'bg-sky-100 text-sky-800',
+      count: '30 題 · 形似對照',
+      icon: Layers,
+      hasFullHub: true,
+    },
+    {
       id: 'numbers' as QuizCategory,
-      title: '數字聽力與讀音特訓 (12題)',
-      desc: '含純聽力音訊題！0~10、100~900(さんびゃく/ろっぴゃく/はっぴゃく)、1000~10000、百円、4/7/9 雙讀法',
+      title: '系統唸數字 ➔ 我選數字聽力題庫 (24題)',
+      desc: '系統自動唸出日文數字發音！涵蓋 0~10、4/7/9 雙讀法、300/600/800(さんびゃく/ろっぴゃく/はっぴゃく)、3000/8000、複合數字與金額',
       badge: '支援聽音選號',
       badgeColor: 'bg-indigo-100 text-indigo-800',
-      count: '12 題 · 聽讀題',
+      count: '24 題 · 聽音選數字',
       icon: Hash,
     },
     {
@@ -66,15 +89,6 @@ export const CategoryQuizSelector: React.FC<CategoryQuizSelectorProps> = ({
       badgeColor: 'bg-red-100 text-red-800',
       count: '10 題 · 深度解讀',
       icon: Flame,
-    },
-    {
-      id: 'gojuon' as QuizCategory,
-      title: '五十音平片對照與辨識 (10題)',
-      desc: 'あ~ん、片假名四天王：シ(shi) vs ツ(tsu)、ソ(so) vs ン(n)、ス vs ヌ、平假名ろ vs る',
-      badge: '基礎奠基',
-      badgeColor: 'bg-sky-100 text-sky-800',
-      count: '10 題 · 平片對照',
-      icon: Layers,
     },
   ];
 
@@ -119,13 +133,24 @@ export const CategoryQuizSelector: React.FC<CategoryQuizSelectorProps> = ({
                 </p>
               </div>
 
-              <button
-                onClick={() => onSelectCategory(cat.id, cat.title)}
-                className="w-full py-2.5 px-4 rounded-xl bg-stone-900 hover:bg-amber-600 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-xs active:scale-98"
-              >
-                <span>開始本單元測驗</span>
-                <ArrowRight size={15} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onSelectCategory(cat.id, cat.title)}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-stone-900 hover:bg-amber-600 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-xs active:scale-98"
+                >
+                  <span>開始本單元測驗</span>
+                  <ArrowRight size={15} />
+                </button>
+                {cat.hasFullHub && onOpenFullGojuonHub && (
+                  <button
+                    onClick={onOpenFullGojuonHub}
+                    className="py-2.5 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-semibold transition-colors cursor-pointer shrink-0"
+                    title="開啟全 46 音七大模式題庫（含平轉片、片轉平、看字選音、聽音辨字）"
+                  >
+                    全46音模式
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

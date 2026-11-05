@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FileCheck2,
   Sparkles,
@@ -13,6 +13,8 @@ import {
   ArrowRight,
   Flame,
   Volume2,
+  Clock,
+  Shuffle,
 } from 'lucide-react';
 import { Navbar, NavTab } from './components/Navbar';
 import { QuizEngine } from './components/QuizEngine';
@@ -23,6 +25,8 @@ import { FlashcardsView } from './components/FlashcardsView';
 import { MistakesReview } from './components/MistakesReview';
 import { CategoryQuizSelector } from './components/CategoryQuizSelector';
 import { VisualMnemonics } from './components/VisualMnemonics';
+import { GojuonQuizHub } from './components/GojuonQuizHub';
+import { LastHourSprintHub } from './components/LastHourSprintHub';
 import { HIRAGANA_EXAM_QUESTIONS, KATAKANA_EXAM_QUESTIONS } from './data/examQuestions';
 import { GOJUON_PRACTICE_QUESTIONS, DAKUON_YOUON_QUESTIONS } from './data/gojuonData';
 import { CONVERSATION_QUIZ_QUESTIONS } from './data/conversationData';
@@ -41,8 +45,36 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
   // Active Category quiz sub-state (if user picked a specific quiz inside category_quiz)
-  const [activeQuizCategory, setActiveQuizCategory] = useState<QuizCategory | null>(null);
+  const [activeQuizCategory, setActiveQuizCategory] = useState<QuizCategory | 'custom_combined' | null>(null);
   const [activeQuizTitle, setActiveQuizTitle] = useState<string>('');
+  const [combinedRandomQuestions, setCombinedRandomQuestions] = useState<QuizQuestion[]>([]);
+
+  const buildCombinedRandom25 = (): QuizQuestion[] => {
+    const pool = [
+      ...HIRAGANA_EXAM_QUESTIONS,
+      ...KATAKANA_EXAM_QUESTIONS,
+      ...GOJUON_PRACTICE_QUESTIONS,
+      ...NUMBER_QUIZ_QUESTIONS,
+      ...CONVERSATION_QUIZ_QUESTIONS,
+    ];
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    return pool.slice(0, 25).map((q) => {
+      const indexed = q.options.map((opt, idx) => ({ opt, idx }));
+      for (let i = indexed.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
+      }
+      const newCorrectIndex = indexed.findIndex((item) => item.idx === q.correctIndex);
+      return {
+        ...q,
+        options: indexed.map((item) => item.opt),
+        correctIndex: newCorrectIndex >= 0 ? newCorrectIndex : 0,
+      };
+    });
+  };
 
   // Mistakes persistence in localStorage
   const [mistakes, setMistakes] = useState<QuizQuestion[]>(() => {
@@ -59,6 +91,7 @@ export default function App() {
   });
 
   const [isRetestingMistakes, setIsRetestingMistakes] = useState(false);
+  const [retestSnapshot, setRetestSnapshot] = useState<QuizQuestion[]>([]);
 
   // Save mistakes on change
   useEffect(() => {
@@ -88,19 +121,26 @@ export default function App() {
 
   // Launch Category Quiz
   const handleLaunchCategoryQuiz = (cat: QuizCategory | 'custom_combined', title: string) => {
-    setActiveQuizCategory(cat as QuizCategory);
+    if (cat === 'custom_combined') {
+      setCombinedRandomQuestions(buildCombinedRandom25());
+    }
+    setActiveQuizCategory(cat);
     setActiveQuizTitle(title);
     setIsRetestingMistakes(false);
   };
 
   // Launch Retest of Mistakes
   const handleRetestMistakes = () => {
+    setRetestSnapshot([...mistakes]);
     setIsRetestingMistakes(true);
     setActiveTab('mistakes_review');
   };
 
-  // Full 40 questions for the Midterm Exam
-  const fullMidtermQuestions = [...HIRAGANA_EXAM_QUESTIONS, ...KATAKANA_EXAM_QUESTIONS];
+  // Full 40 questions for the Midterm Exam (memoized so mistake updates don't reset active quiz state)
+  const fullMidtermQuestions = useMemo(
+    () => [...HIRAGANA_EXAM_QUESTIONS, ...KATAKANA_EXAM_QUESTIONS],
+    []
+  );
 
   return (
     <div className="min-h-screen bg-stone-50 flex flex-col text-stone-900">
@@ -157,6 +197,25 @@ export default function App() {
                   </div>
                   <AudioButton text="寮、りょう" rate={speechRate} size="sm" variant="pill" label="聽寮發音" />
                 </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setActiveTab('sprint_hub')}
+                    className="px-4 py-2 rounded-xl bg-white text-amber-900 hover:bg-amber-50 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-sm cursor-pointer transition-colors"
+                  >
+                    <Clock size={15} />
+                    <span>進入考前 1 小時「遮蓋法 × 逆推法」衝刺題庫 (全範圍 76+25 題)</span>
+                    <ArrowRight size={14} />
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('number_lab')}
+                    className="px-4 py-2 rounded-xl bg-amber-900/40 hover:bg-amber-900/60 text-white border border-white/25 font-semibold text-xs sm:text-sm flex items-center gap-2 cursor-pointer transition-colors"
+                  >
+                    <Hash size={15} />
+                    <span>唸數字 ➔ 我選數字題庫 (24題＋無限隨機)</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -176,14 +235,36 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB: LAST HOUR SPRINT HUB (考前1小時遮蓋法 × 逆推法實戰題庫) */}
+        {activeTab === 'sprint_hub' && (
+          <LastHourSprintHub
+            speechRate={speechRate}
+            soundEnabled={soundEnabled}
+            onMistakeAdded={handleAddMistake}
+            onMistakeResolved={handleRemoveMistake}
+            mistakeIds={mistakeIds}
+            onGoToMistakes={() => setActiveTab('mistakes_review')}
+          />
+        )}
+
+        {/* TAB: GOJUON MULTIPLE-CHOICE QUIZ HUB (五十音平假片假選擇題) */}
+        {activeTab === 'gojuon_quiz' && (
+          <GojuonQuizHub
+            speechRate={speechRate}
+            soundEnabled={soundEnabled}
+            onMistakeAdded={handleAddMistake}
+            onMistakeResolved={handleRemoveMistake}
+            mistakeIds={mistakeIds}
+            onGoToMnemonics={() => setActiveTab('visual_mnemonics')}
+          />
+        )}
+
         {/* TAB: VISUAL MNEMONICS (圖像記憶館) */}
         {activeTab === 'visual_mnemonics' && (
           <VisualMnemonics
             speechRate={speechRate}
             onLaunchPracticeQuiz={() => {
-              setActiveTab('category_quiz');
-              setActiveQuizCategory('gojuon');
-              setActiveQuizTitle('五十音平片對照與辨識測驗');
+              setActiveTab('gojuon_quiz');
             }}
           />
         )}
@@ -193,18 +274,33 @@ export default function App() {
           <div>
             {activeQuizCategory ? (
               <div className="space-y-4">
-                <button
-                  onClick={() => setActiveQuizCategory(null)}
-                  className="text-xs font-semibold text-stone-500 hover:text-stone-900 flex items-center gap-1 cursor-pointer"
-                >
-                  ← 返回專項測驗列表
-                </button>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    onClick={() => setActiveQuizCategory(null)}
+                    className="text-xs font-semibold text-stone-500 hover:text-stone-900 flex items-center gap-1 cursor-pointer"
+                  >
+                    ← 返回專項測驗列表
+                  </button>
+
+                  {activeQuizCategory === 'custom_combined' && (
+                    <button
+                      type="button"
+                      onClick={() => setCombinedRandomQuestions(buildCombinedRandom25())}
+                      className="px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <Shuffle size={13} />
+                      <span>從全範圍題庫重新抽取 25 題</span>
+                    </button>
+                  )}
+                </div>
 
                 <QuizEngine
                   key={`category-${activeQuizCategory}`}
                   title={activeQuizTitle || '專項自選測驗'}
                   questions={
-                    activeQuizCategory === 'midterm_hiragana'
+                    activeQuizCategory === 'custom_combined'
+                      ? combinedRandomQuestions
+                      : activeQuizCategory === 'midterm_hiragana'
                       ? HIRAGANA_EXAM_QUESTIONS
                       : activeQuizCategory === 'midterm_katakana'
                       ? KATAKANA_EXAM_QUESTIONS
@@ -225,7 +321,10 @@ export default function App() {
                 />
               </div>
             ) : (
-              <CategoryQuizSelector onSelectCategory={handleLaunchCategoryQuiz} />
+              <CategoryQuizSelector
+                onSelectCategory={handleLaunchCategoryQuiz}
+                onOpenFullGojuonHub={() => setActiveTab('gojuon_quiz')}
+              />
             )}
           </div>
         )}
@@ -235,9 +334,7 @@ export default function App() {
           <GojuonChart
             speechRate={speechRate}
             onStartGojuonQuiz={() => {
-              setActiveTab('category_quiz');
-              setActiveQuizCategory('gojuon');
-              setActiveQuizTitle('五十音平片對照與辨識測驗');
+              setActiveTab('gojuon_quiz');
             }}
           />
         )}
@@ -246,10 +343,14 @@ export default function App() {
         {activeTab === 'number_lab' && (
           <NumberBoard
             speechRate={speechRate}
+            soundEnabled={soundEnabled}
+            onMistakeAdded={handleAddMistake}
+            onMistakeResolved={handleRemoveMistake}
+            mistakeIds={mistakeIds}
             onStartNumberQuiz={() => {
               setActiveTab('category_quiz');
               setActiveQuizCategory('numbers');
-              setActiveQuizTitle('數字聽力與讀音特訓測驗');
+              setActiveQuizTitle('系統唸數字 ➔ 我選數字（24題聽力測驗）');
             }}
           />
         )}
@@ -281,9 +382,9 @@ export default function App() {
                   ← 返回錯題筆記列表
                 </button>
                 <QuizEngine
-                  key={`mistakes-retest-${mistakes.length}`}
+                  key="mistakes-retest-engine"
                   title="錯題弱點強化測驗"
-                  questions={mistakes}
+                  questions={retestSnapshot.length > 0 ? retestSnapshot : mistakes}
                   speechRate={speechRate}
                   soundEnabled={soundEnabled}
                   onMistakeAdded={handleAddMistake}

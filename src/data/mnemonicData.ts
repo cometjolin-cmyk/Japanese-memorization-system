@@ -312,7 +312,7 @@ export const SEION_MNEMONICS: MnemonicCard[] = [
   {
     id: 'm-ne',
     romaji: 'ne',
-    hiragana: 'ne',
+    hiragana: 'ね',
     katakana: 'ネ',
     visualEmoji: '🐈',
     row: 'な行 (na)',
@@ -433,7 +433,7 @@ export const SEION_MNEMONICS: MnemonicCard[] = [
   {
     id: 'm-mu',
     romaji: 'mu',
-    hiragana: 'mu',
+    hiragana: 'む',
     katakana: 'ム',
     visualEmoji: '🐮',
     row: 'ま行 (ma)',
@@ -459,7 +459,7 @@ export const SEION_MNEMONICS: MnemonicCard[] = [
   {
     id: 'm-mo',
     romaji: 'mo',
-    hiragana: 'mo',
+    hiragana: 'も',
     katakana: 'モ',
     visualEmoji: '🪱',
     row: 'ま行 (ma)',
@@ -567,8 +567,8 @@ export const SEION_MNEMONICS: MnemonicCard[] = [
   {
     id: 'm-ro',
     romaji: 'ro',
-    hiragana: 'ro',
-    katakana: 'ろ',
+    hiragana: 'ろ',
+    katakana: 'ロ',
     visualEmoji: '🛣️',
     row: 'ら行 (ra)',
     hiraMnemonicTitle: '★ 空蕩蕩敞開的大馬路 (Road)',

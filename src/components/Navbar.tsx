@@ -10,11 +10,14 @@ import {
   Sparkles,
   Play,
   Settings2,
+  Clock,
 } from 'lucide-react';
 import { VoiceEngineType, speakJapanese } from '../utils/audio';
 
 export type NavTab =
   | 'midterm_exam'
+  | 'sprint_hub'
+  | 'gojuon_quiz'
   | 'visual_mnemonics'
   | 'category_quiz'
   | 'gojuon_chart'
@@ -64,6 +67,20 @@ export const Navbar: React.FC<NavbarProps> = ({
       badge: '必考原題',
     },
     {
+      id: 'sprint_hub' as NavTab,
+      label: '⏱️ 遮蓋×逆推衝刺',
+      icon: Clock,
+      sub: '考前1小時實戰',
+      badge: '全範圍76+25題',
+    },
+    {
+      id: 'gojuon_quiz' as NavTab,
+      label: '📝 五十音選擇題',
+      icon: Layers,
+      sub: '平片互轉/聽音/形似字',
+      badge: '全46音題庫',
+    },
+    {
       id: 'visual_mnemonics' as NavTab,
       label: '🎨 圖像記憶館',
       icon: Sparkles,
@@ -86,7 +103,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       id: 'number_lab' as NavTab,
       label: '數字聽讀選',
       icon: Hash,
-      sub: '0~1萬・音變特訓',
+      sub: '唸數字·我選數字',
+      badge: '24題＋無限隨機',
     },
     {
       id: 'conversations' as NavTab,

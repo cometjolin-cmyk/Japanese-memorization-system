@@ -23,6 +23,8 @@ export interface QuizQuestion {
   romaji: string;
   meaningZh: string;
   mnemonicTip?: string;
+  preHint?: string;
+  disablePreAnswerAudio?: boolean;
   isPastExamMistake?: boolean; // Specifically for 寮 (0/5)
   soundWarning?: string; // e.g. "長音注意", "促音注意", "拗音注意", "シ/ツ區分"
 }
